@@ -5,9 +5,12 @@ import subprocess
 import pytesseract
 import re
 import os
+import matplotlib.pyplot as plt
+plt.rcParams['font.sans-serif'] = ['SimHei']
+from scipy.stats import skew, kurtosis
 
 # 输入需要解析的视频：视频会自动解码为H.264 480p mp4封装视频
-input = r"C:\Users\tiantian\b1.mp4"
+input = r"C:\Users\tiantian\83.mp4"
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Users\tiantian\AppData\Local\Tesseract-OCR\tesseract.exe'
 VIDEO_PATH = r"1.mp4"
@@ -65,10 +68,10 @@ def compress_video(input_path, output_path, crf=28, preset='ultrafast'):
         return True
 
     except subprocess.CalledProcessError as e:
-        print(f"处理失败。错误信息: {e.stderr}")
+        print(f"error处理失败。错误信息: {e.stderr}")
         return False
     except FileNotFoundError:
-        print("未找到FFmpeg，请确保已安装并添加到系统环境变量。")
+        print("error未找到FFmpeg，请确保已安装并添加到系统环境变量。")
         return False
 
 
@@ -123,15 +126,212 @@ def calculate_median(data):
     return median
 
 
+def calculate_advanced_stats(data):
+    """计算高级统计指标"""
+    if not data:
+        return None
+
+    displacements = [item[0] for item in data]
+
+    # 基础统计量
+    mean_val = np.mean(displacements)
+    median_val = np.median(displacements)
+    std_dev = np.std(displacements)  # 标准差
+    variance = np.var(displacements)  # 方差
+
+    # 百分位数
+    percentiles = {
+        '25th': np.percentile(displacements, 25),
+        '50th': np.percentile(displacements, 50),
+        '75th': np.percentile(displacements, 75),
+        '90th': np.percentile(displacements, 90),
+        '95th': np.percentile(displacements, 95)
+    }
+
+    # 四分位距
+    iqr = percentiles['75th'] - percentiles['25th']
+
+    # 偏度和峰度
+    skewness = skew(displacements)
+    kurt = kurtosis(displacements)
+
+    # 变异系数
+    cv = (std_dev / mean_val) * 100 if mean_val != 0 else 0
+
+    return {
+        'mean': mean_val,
+        'median': median_val,
+        'std_dev': std_dev,
+        'variance': variance,
+        'percentiles': percentiles,
+        'iqr': iqr,
+        'skewness': skewness,
+        'kurtosis': kurt,
+        'cv': cv
+    }
+
+
+def plot_error_distribution(data):
+    """绘制误差分布图"""
+    if not data:
+        print("无数据可绘制")
+        return
+
+    displacements = [item[0] for item in data]
+
+    # 创建图形
+    plt.figure(figsize=(15, 10))
+
+    # 1. 直方图
+    plt.subplot(2, 3, 1)
+    n, bins, patches = plt.hist(displacements, bins=20, alpha=0.7, color='skyblue', edgecolor='black')
+    plt.xlabel('位移误差 (mm)')
+    plt.ylabel('频数')
+    plt.title('tcp重定位运动误差分布直方图')
+    plt.grid(True, alpha=0.3)
+
+    # 添加统计信息到直方图
+    stats_text = f'平均值: {np.mean(displacements):.4f} mm\n标准差: {np.std(displacements):.4f} mm'
+    plt.text(0.95, 0.95, stats_text, transform=plt.gca().transAxes,
+             verticalalignment='top', horizontalalignment='right',
+             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+    # 2. 箱线图
+    plt.subplot(2, 3, 2)
+    box_plot = plt.boxplot(displacements, patch_artist=True)
+    box_plot['boxes'][0].set_facecolor('lightgreen')
+    plt.ylabel('重定位过程位移误差 (mm)')
+    plt.title('误差箱线图')
+    plt.grid(True, alpha=0.3)
+
+    # 3. 概率密度图
+    plt.subplot(2, 3, 3)
+    from scipy.stats import gaussian_kde
+    density = gaussian_kde(displacements)
+    xs = np.linspace(min(displacements), max(displacements), 200)
+    plt.plot(xs, density(xs), 'b-', linewidth=2)
+    plt.fill_between(xs, density(xs), alpha=0.3, color='blue')
+    plt.xlabel('位移误差 (mm)')
+    plt.ylabel('概率密度')
+    plt.title('重定位误差概率密度分布')
+    plt.grid(True, alpha=0.3)
+
+    # 4. 累积分布函数图
+    plt.subplot(2, 3, 4)
+    sorted_data = np.sort(displacements)
+    yvals = np.arange(len(sorted_data)) / float(len(sorted_data) - 1)
+    plt.plot(sorted_data, yvals, 'r-', linewidth=2)
+    plt.xlabel('位移误差 (mm)')
+    plt.ylabel('累积概率')
+    plt.title('误差累积分布函数')
+    plt.grid(True, alpha=0.3)
+
+    # 5. Q-Q图（正态概率图）
+    plt.subplot(2, 3, 5)
+    from scipy.stats import probplot
+    probplot(displacements, dist="norm", plot=plt)
+    plt.title('Q-Q图 (正态检验)')
+    plt.grid(True, alpha=0.3)
+
+    # 6. 时间序列图
+    plt.subplot(2, 3, 6)
+    frames = [int(item[4]) for item in data]
+    plt.plot(frames, displacements, 'b.-', alpha=0.7, markersize=3)
+    plt.xlabel('帧号')
+    plt.ylabel('位移误差 (mm)')
+    plt.title('误差时间序列')
+    plt.grid(True, alpha=0.3)
+
+    # 添加移动平均线
+    window_size = min(10, len(displacements) // 10)
+    if window_size > 1:
+        moving_avg = np.convolve(displacements, np.ones(window_size) / window_size, mode='valid')
+        plt.plot(frames[window_size - 1:], moving_avg, 'r-', linewidth=2, label=f'{window_size}帧移动平均')
+        plt.legend()
+
+    plt.tight_layout()
+    plt.savefig('error_analysis_comprehensive.png', dpi=300, bbox_inches='tight')
+    print(" 误差分析图表已保存为 'error_analysis_comprehensive.png'")
+    plt.show()
+
+
+def comprehensive_error_analysis(data):
+    """综合误差分析报告"""
+    if not data:
+        print("无有效数据进行评估")
+        return
+
+    displacements = [item[0] for item in data]
+
+    # 计算高级统计指标
+    stats = calculate_advanced_stats(data)
+
+    print("\n" + "=" * 70)
+    print("                   以下是机器人重定位误差综合评估")
+    print("=" * 70)
+
+    print(f"\n 基础统计:")
+    print(f"   样本数量: {len(displacements)}")
+    print(f"   平均值: {stats['mean']:.6f} mm")
+    print(f"   中位数: {stats['median']:.6f} mm")
+    print(f"   最小值: {min(displacements):.6f} mm")
+    print(f"   最大值: {max(displacements):.6f} mm")
+    print(f"   极差: {max(displacements) - min(displacements):.6f} mm")
+
+    print(f"\n 变异性指标:")
+    print(f"   标准差: {stats['std_dev']:.6f} mm")
+    print(f"   方差: {stats['variance']:.6f} mm²")
+    print(f"   变异系数: {stats['cv']:.2f}%")
+    print(f"   四分位距 (IQR): {stats['iqr']:.6f} mm")
+
+    print(f"\n 百分位数分析:")
+    for key, value in stats['percentiles'].items():
+        print(f"   {key}分位数: {value:.6f} mm")
+
+    print(f"\n 分布形状分析:")
+    print(f"   偏度: {stats['skewness']:.4f}")
+    skew_interpretation = "右偏分布" if stats['skewness'] > 0.5 else "左偏分布" if stats['skewness'] < -0.5 else "基本对称"
+    print(f"   分布形态: {skew_interpretation}")
+
+    print(f"   峰度: {stats['kurtosis']:.4f}")
+    kurt_interpretation = "尖峰分布" if stats['kurtosis'] > 1 else "低峰分布" if stats['kurtosis'] < -1 else "接近正态峰度"
+    print(f"   峰度特征: {kurt_interpretation}")
+
+    print(f"\n 质量评估:")
+    if stats['cv'] < 10:
+        print("   ok 误差稳定性: 优秀 (变异系数 < 10%)")
+    elif stats['cv'] < 20:
+        print("   fine  误差稳定性: 良好 (变异系数 10-20%)")
+    else:
+        print("   warning 误差稳定性: 参考结果图以评估机器人精度 (变异系数 > 20%)")
+
+    if stats['iqr'] / stats['mean'] < 0.1:
+        print("   ok 数据集中度: 优秀")
+    elif stats['iqr'] / stats['mean'] < 0.2:
+        print("   fine  数据集中度: 良好")
+    else:
+        print("   warning 数据集中度: 分散")
+
+    # 偏度对误差分析的影响
+    if abs(stats['skewness']) > 1:
+        print("   warning 注意: 数据明显偏态，可能存在系统性误差或异常值")
+    elif abs(stats['skewness']) > 0.5:
+        print("   tips 提示: 数据轻微偏态，建议检查误差分布")
+    else:
+        print(" ok 数据分布: 接近对称分布")
+
+    return stats
+
+
 def main():
     if not os.path.isfile(VIDEO_PATH):
-        print("❌ 视频不存在");
+        print("error 视频不存在");
         return
 
     cap = cv2.VideoCapture(VIDEO_PATH)
     ret, first = cap.read()
     if not ret:
-        print("❌ 读不到第一帧");
+        print("error 读不到第一帧");
         return
 
     roi = cv2.selectROI("在第一帧框 ROI（空格确认）", first, False)
@@ -142,7 +342,7 @@ def main():
     fout = open(OUTPUT_TXT, "w", encoding="utf-8")
     max_err = 0.0
     hits = 0
-    step = 5  # 可改成 1 不跳帧
+    step = 3  # 可改成 1 不跳帧
 
     frame_id = 0
     while True:
@@ -190,7 +390,7 @@ def main():
 
     cap.release()
     fout.close()
-    print(f"\n✅ 完成，有效坐标 {hits} 组，最大空间误差 = {max_err:.6f} mm")
+    print(f"\n 完成，有效坐标 {hits} 组，最大空间误差 = {max_err:.6f} mm")
 
     filename = "valid_xyz.txt"
 
@@ -246,6 +446,24 @@ def main():
         print(f"X: {max_data[1]:.6f}")
         print(f"Y: {max_data[2]:.6f}")
         print(f"Z: {max_data[3]:.6f}")
+
+
+        # 综合统计分析
+        stats = comprehensive_error_analysis(data)
+
+        # 绘制误差分布图
+        print("\n生成误差分布图表...")
+        plot_error_distribution(data)
+
+        # 生成分析报告摘要
+        print("\n" + "=" * 70)
+        print("分析报告摘要")
+        print("=" * 70)
+        print(f" 数据概况: 共分析 {len(data)} 个有效样本")
+        print(f" 主要指标: 平均误差 {stats['mean']:.4f} mm ± {stats['std_dev']:.4f} mm")
+        print(f" 分布特征: {stats['skewness']:.2f} 偏度, {stats['kurtosis']:.2f} 峰度")
+        print(f" 稳定性: 变异系数 {stats['cv']:.1f}%")
+        print("=" * 70)
 
     except FileNotFoundError:
         print(f"文件 {filename} 未找到")
