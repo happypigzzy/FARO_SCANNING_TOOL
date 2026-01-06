@@ -1,5 +1,6 @@
 # skip_star_tcp.py
 import cv2
+import sys
 import numpy as np
 import subprocess
 import pytesseract
@@ -9,8 +10,7 @@ import matplotlib.pyplot as plt
 plt.rcParams['font.sans-serif'] = ['SimHei']
 from scipy.stats import skew, kurtosis
 
-# 输入需要解析的视频：视频会自动解码为H.264 480p mp4封装视频
-input = r"C:\Users\tiantian\83.mp4"
+input = r"C:\Users\tiantian\Desktop\宁波52\8\4600-522689\重定位数据\s723.mp4"
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Users\tiantian\AppData\Local\Tesseract-OCR\tesseract.exe'
 VIDEO_PATH = r"1.mp4"
@@ -326,6 +326,7 @@ def comprehensive_error_analysis(data):
 def main():
     if not os.path.isfile(VIDEO_PATH):
         print("error 视频不存在");
+        sys.exit()
         return
 
     cap = cv2.VideoCapture(VIDEO_PATH)
