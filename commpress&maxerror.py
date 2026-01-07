@@ -1,5 +1,6 @@
 # skip_star_tcp.py
 import cv2
+import io
 import sys
 import numpy as np
 import subprocess
@@ -7,12 +8,13 @@ import pytesseract
 import re
 import os
 import matplotlib.pyplot as plt
-plt.rcParams['font.sans-serif'] = ['SimHei']
+plt.rcParams['font.sans-serif'] = ['SIMHEI']
 from scipy.stats import skew, kurtosis
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer,encoding='gb18030')
 
-input = r"C:\Users\tiantian\Desktop\宁波52\8\4600-522689\重定位数据\s723.mp4"
+input = r"C:\Users\0070\Desktop\宁波52\11\4600-522690\重定位数据\1012.mp4"
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Users\tiantian\AppData\Local\Tesseract-OCR\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe'
 VIDEO_PATH = r"1.mp4"
 OUTPUT_TXT = "valid_xyz.txt"
 
