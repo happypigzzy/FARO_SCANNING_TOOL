@@ -9,10 +9,11 @@ import re
 import os
 import matplotlib.pyplot as plt
 plt.rcParams['font.sans-serif'] = ['SIMHEI']
+plt.rcParams['axes.unicode_minus'] = False
 from scipy.stats import skew, kurtosis
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer,encoding='gb18030')
 
-input = r"C:\Users\0070\Desktop\宁波52\11\4600-522690\重定位数据\1012.mp4"
+input = r"C:\Users\0070\Desktop\宁波52\11\4600-522690\重定位数据\1021.mp4"
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe'
 VIDEO_PATH = r"1.mp4"
@@ -282,7 +283,7 @@ def comprehensive_error_analysis(data):
 
     print(f"\n 变异性指标:")
     print(f"   标准差: {stats['std_dev']:.6f} mm")
-    print(f"   方差: {stats['variance']:.6f} mm²")
+    print(f"   方差: {stats['variance']:.6f} (mm)^2")
     print(f"   变异系数: {stats['cv']:.2f}%")
     print(f"   四分位距 (IQR): {stats['iqr']:.6f} mm")
 
